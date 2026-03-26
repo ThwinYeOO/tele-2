@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,10 +13,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Star, MapPin, Clock, Video, Stethoscope, Search, Filter, Calendar } from 'lucide-react';
+import { api } from '@/lib/api';
 
 const PatientDoctors = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [specialty, setSpecialty] = useState('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [doctors, setDoctors] = useState<Array<{
+    id: string;
+    name: string;
+    specialty: string;
+    hospital: string;
+    experienceYears: number;
+    rating: number;
+    reviews: number;
+    languages: string[];
+    consultationFee: number;
+    image?: string;
+  }>>([]);
 
   const specialties = [
     'All Specialties',
@@ -29,100 +46,48 @@ const PatientDoctors = () => {
     'Gynecology',
   ];
 
-  const doctors = [
-    {
-      id: 1,
-      name: 'Dr. Khin Mya',
-      specialty: 'Cardiologist',
-      hospital: 'Yangon General Hospital',
-      experience: '15 years',
-      rating: 4.9,
-      reviews: 128,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 25000,
-      availableToday: true,
-      nextSlot: '2:30 PM',
-      image: '',
-    },
-    {
-      id: 2,
-      name: 'Dr. Aung Win',
-      specialty: 'Dermatologist',
-      hospital: 'Asia Royal Hospital',
-      experience: '12 years',
-      rating: 4.8,
-      reviews: 96,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 30000,
-      availableToday: true,
-      nextSlot: '4:00 PM',
-      image: '',
-    },
-    {
-      id: 3,
-      name: 'Dr. Su Su',
-      specialty: 'Pediatrician',
-      hospital: 'Pun Hlaing Hospital',
-      experience: '10 years',
-      rating: 4.7,
-      reviews: 85,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 20000,
-      availableToday: false,
-      nextSlot: 'Tomorrow 9:00 AM',
-      image: '',
-    },
-    {
-      id: 4,
-      name: 'Dr. Than Htut',
-      specialty: 'General Physician',
-      hospital: 'Bahosi Hospital',
-      experience: '8 years',
-      rating: 4.6,
-      reviews: 72,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 15000,
-      availableToday: true,
-      nextSlot: 'Now',
-      image: '',
-    },
-    {
-      id: 5,
-      name: 'Dr. Myo Min',
-      specialty: 'Orthopedic',
-      hospital: 'Yangon General Hospital',
-      experience: '14 years',
-      rating: 4.8,
-      reviews: 110,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 28000,
-      availableToday: false,
-      nextSlot: 'Tomorrow 2:00 PM',
-      image: '',
-    },
-    {
-      id: 6,
-      name: 'Dr. Hla Hla',
-      specialty: 'Gynecologist',
-      hospital: 'Asia Royal Hospital',
-      experience: '11 years',
-      rating: 4.9,
-      reviews: 145,
-      languages: ['English', 'Myanmar'],
-      consultationFee: 35000,
-      availableToday: true,
-      nextSlot: '5:30 PM',
-      image: '',
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsLoading(true);
+        setError('');
+        const res = await api.get<{ doctors: typeof doctors }>('/api/doctors');
+        if (!cancelled) setDoctors(res.doctors);
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || 'Failed to load doctors');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filteredDoctors = doctors.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         doc.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         doc.hospital.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSpecialty = specialty === 'all' || doc.specialty.toLowerCase() === specialty.toLowerCase();
-    return matchesSearch && matchesSpecialty;
-  });
+  const filteredDoctors = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return doctors.filter((doc) => {
+      const matchesSearch =
+        doc.name.toLowerCase().includes(q) ||
+        doc.specialty.toLowerCase().includes(q) ||
+        doc.hospital.toLowerCase().includes(q);
+      const matchesSpecialty =
+        specialty === 'all' || doc.specialty.toLowerCase().includes(specialty.toLowerCase());
+      return matchesSearch && matchesSpecialty;
+    });
+  }, [doctors, searchQuery, specialty]);
+
+  const bookNow = async (doctorId: string) => {
+    try {
+      // Demo: book a slot 2 hours from now
+      const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+      await api.post('/api/appointments', { doctorId, scheduledAt, type: 'video' });
+      navigate('/patient/appointments');
+    } catch (e: any) {
+      setError(e?.message || 'Booking failed');
+    }
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -179,9 +144,22 @@ const PatientDoctors = () => {
         </Select>
       </div>
 
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            {error}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Doctors Grid */}
       <div className="grid lg:grid-cols-2 gap-4">
-        {filteredDoctors.map((doctor) => (
+        {isLoading ? (
+          <Card>
+            <CardContent className="p-6 text-slate-600">Loading doctors…</CardContent>
+          </Card>
+        ) : (
+          filteredDoctors.map((doctor) => (
           <Card key={doctor.id} className="hover:shadow-lg transition-shadow">
             <CardContent className="p-5">
               <div className="flex gap-4">
@@ -200,7 +178,7 @@ const PatientDoctors = () => {
                     </div>
                     <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg">
                       <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-                      <span className="text-sm font-medium text-amber-700">{doctor.rating}</span>
+                      <span className="text-sm font-medium text-amber-700">{doctor.rating.toFixed(1)}</span>
                     </div>
                   </div>
 
@@ -210,7 +188,7 @@ const PatientDoctors = () => {
 
                   <div className="flex flex-wrap gap-2 mt-2">
                     <Badge variant="secondary" className="text-xs">
-                      {doctor.experience}
+                      {doctor.experienceYears} years
                     </Badge>
                     <Badge variant="outline" className="text-xs">
                       {doctor.reviews} reviews
@@ -231,9 +209,9 @@ const PatientDoctors = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-500">Next Available</p>
-                  <p className={`text-sm font-medium ${doctor.availableToday ? 'text-green-600' : 'text-slate-600'}`}>
+                  <p className="text-sm font-medium text-green-600">
                     <Clock className="w-3 h-3 inline mr-1" />
-                    {doctor.nextSlot}
+                    Today
                   </p>
                 </div>
               </div>
@@ -243,14 +221,18 @@ const PatientDoctors = () => {
                   <Video className="w-4 h-4" />
                   Video
                 </Button>
-                <Button className="flex-1 bg-teal-600 hover:bg-teal-700 gap-2">
+                <Button
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 gap-2"
+                  onClick={() => bookNow(doctor.id)}
+                >
                   <Calendar className="w-4 h-4" />
                   Book Now
                 </Button>
               </div>
             </CardContent>
           </Card>
-        ))}
+          ))
+        )}
       </div>
 
       {filteredDoctors.length === 0 && (

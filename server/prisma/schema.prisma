@@ -1,0 +1,112 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  patient
+  doctor
+  hospital_admin
+  super_admin
+}
+
+enum AppointmentType {
+  video
+  in_person
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  in_progress
+  completed
+  cancelled
+}
+
+model User {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role
+  isVerified   Boolean  @default(true)
+
+  hospitalAdminOf Hospital? @relation("HospitalAdmin")
+  doctorProfile   DoctorProfile?
+  patientProfile  PatientProfile?
+
+  patientAppointments Appointment[] @relation("AppointmentPatient")
+  doctorAppointments  Appointment[] @relation("AppointmentDoctor")
+}
+
+model Hospital {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name      String
+  address   String?
+
+  adminId   String?  @unique
+  admin     User?    @relation("HospitalAdmin", fields: [adminId], references: [id])
+
+  doctors   DoctorProfile[]
+}
+
+model DoctorProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+
+  specialty       String
+  experienceYears Int
+  consultationFee Int
+  languages       String
+  rating          Float   @default(4.8)
+  reviewCount     Int     @default(0)
+
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id])
+}
+
+model PatientProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Appointment {
+  id        String            @id @default(cuid())
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  patientId String
+  patient   User              @relation("AppointmentPatient", fields: [patientId], references: [id])
+
+  doctorId  String
+  doctor    User              @relation("AppointmentDoctor", fields: [doctorId], references: [id])
+
+  scheduledAt DateTime
+  type        AppointmentType
+  status      AppointmentStatus @default(pending)
+  notes       String?
+}

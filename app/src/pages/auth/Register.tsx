@@ -107,13 +107,13 @@ const Register = () => {
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Registration Successful!</h2>
             <p className="text-slate-600 mb-6">
-              Your account has been created successfully. Please check your email to verify your account.
+              Your account has been created successfully.
             </p>
             <Button 
-              onClick={() => navigate('/login')} 
+              onClick={() => navigate(`/${activeTab}/dashboard`)} 
               className="bg-teal-600 hover:bg-teal-700"
             >
-              Go to Login
+              Go to Dashboard
             </Button>
           </CardContent>
         </Card>

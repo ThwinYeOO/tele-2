@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useEffect } from 'react';
+import { api } from '@/lib/api';
 
 // Layouts
 import PatientLayout from '@/layouts/PatientLayout';
@@ -11,6 +13,7 @@ import AdminLayout from '@/layouts/AdminLayout';
 import Login from '@/pages/auth/Login';
 import Register from '@/pages/auth/Register';
 import ForgotPassword from '@/pages/auth/ForgotPassword';
+import ChoosePortal from '@/pages/auth/ChoosePortal';
 
 // Patient Pages
 import PatientDashboard from '@/pages/patient/Dashboard';
@@ -57,11 +60,28 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode;
 };
 
 function App() {
+  const { token, isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    // If we have a token in storage but user is missing, hydrate session.
+    if (token && !isAuthenticated) {
+      api.get('/api/me')
+        .then((res: any) => {
+          // minimal set; store will accept it via updateUser path by setting state directly
+          useAuthStore.setState({ isAuthenticated: true, user: res.user });
+        })
+        .catch(() => {
+          useAuthStore.setState({ isAuthenticated: false, user: null, token: null });
+        });
+    }
+  }, [token, isAuthenticated]);
+
   return (
     <Router>
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Index />} />
+        <Route path="/sign-in" element={<ChoosePortal />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />

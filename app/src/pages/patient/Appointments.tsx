@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,83 +22,73 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { api } from '@/lib/api';
 
 const PatientAppointments = () => {
   const [activeTab, setActiveTab] = useState('upcoming');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [appointments, setAppointments] = useState<Array<{
+    id: string;
+    doctor: { id: string; name: string };
+    patient: { id: string; name: string };
+    scheduledAt: string;
+    type: 'video' | 'in_person';
+    status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+    notes?: string | null;
+  }>>([]);
 
-  const appointments = {
-    upcoming: [
-      {
-        id: 1,
-        doctor: 'Dr. Khin Mya',
-        specialty: 'Cardiologist',
-        hospital: 'Yangon General Hospital',
-        date: '2024-03-26',
-        time: '2:30 PM',
-        type: 'video',
-        status: 'confirmed',
-        notes: 'Follow-up for blood pressure monitoring',
-      },
-      {
-        id: 2,
-        doctor: 'Dr. Than Htut',
-        specialty: 'General Physician',
-        hospital: 'Asia Royal Hospital',
-        date: '2024-03-27',
-        time: '10:00 AM',
-        type: 'in-person',
-        status: 'pending',
-        notes: 'Annual health checkup',
-      },
-      {
-        id: 3,
-        doctor: 'Dr. Su Su',
-        specialty: 'Dermatologist',
-        hospital: 'Pun Hlaing Hospital',
-        date: '2024-03-29',
-        time: '3:00 PM',
-        type: 'video',
-        status: 'confirmed',
-        notes: 'Skin rash consultation',
-      },
-    ],
-    past: [
-      {
-        id: 4,
-        doctor: 'Dr. Aung Win',
-        specialty: 'Orthopedic',
-        hospital: 'Yangon General Hospital',
-        date: '2024-03-15',
-        time: '11:00 AM',
-        type: 'in-person',
-        status: 'completed',
-        notes: 'Knee pain assessment',
-      },
-      {
-        id: 5,
-        doctor: 'Dr. Khin Mya',
-        specialty: 'Cardiologist',
-        hospital: 'Yangon General Hospital',
-        date: '2024-03-10',
-        time: '2:00 PM',
-        type: 'video',
-        status: 'completed',
-        notes: 'Initial consultation',
-      },
-    ],
-    cancelled: [
-      {
-        id: 6,
-        doctor: 'Dr. Myo Min',
-        specialty: 'ENT Specialist',
-        hospital: 'Bahosi Hospital',
-        date: '2024-03-20',
-        time: '9:00 AM',
-        type: 'in-person',
-        status: 'cancelled',
-        notes: 'Ear infection check',
-      },
-    ],
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsLoading(true);
+        setError('');
+        const res = await api.get<{ appointments: any[] }>('/api/appointments');
+        if (cancelled) return;
+        setAppointments(
+          res.appointments.map((a) => ({
+            id: a.id,
+            doctor: a.doctor,
+            patient: a.patient,
+            scheduledAt: a.scheduledAt,
+            type: a.type,
+            status: a.status,
+            notes: a.notes,
+          }))
+        );
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || 'Failed to load appointments');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const grouped = useMemo(() => {
+    const now = Date.now();
+    const upcoming = [] as typeof appointments;
+    const past = [] as typeof appointments;
+    const cancelled = [] as typeof appointments;
+
+    for (const a of appointments) {
+      if (a.status === 'cancelled') cancelled.push(a);
+      else if (new Date(a.scheduledAt).getTime() < now) past.push(a);
+      else upcoming.push(a);
+    }
+    return { upcoming, past, cancelled };
+  }, [appointments]);
+
+  const cancelAppointment = async (id: string) => {
+    try {
+      await api.post(`/api/appointments/${id}/cancel`);
+      setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'cancelled' } : a)));
+    } catch (e: any) {
+      setError(e?.message || 'Cancel failed');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -111,7 +101,11 @@ const PatientAppointments = () => {
     return styles[status] || 'bg-slate-100 text-slate-700';
   };
 
-  const renderAppointmentCard = (apt: any) => (
+  const renderAppointmentCard = (apt: any) => {
+    const d = new Date(apt.scheduledAt);
+    const date = d.toISOString().slice(0, 10);
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return (
     <Card key={apt.id} className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -119,15 +113,11 @@ const PatientAppointments = () => {
           <div className="flex items-center gap-4 flex-1">
             <Avatar className="w-14 h-14">
               <AvatarFallback className="bg-teal-100 text-teal-700 text-lg">
-                {apt.doctor.split(' ').map((n: string) => n[0]).join('')}
+                {apt.doctor.name.split(' ').map((n: string) => n[0]).join('')}
               </AvatarFallback>
             </Avatar>
             <div>
-              <h4 className="font-semibold text-slate-900">{apt.doctor}</h4>
-              <p className="text-sm text-slate-500">{apt.specialty}</p>
-              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3" /> {apt.hospital}
-              </p>
+              <h4 className="font-semibold text-slate-900">{apt.doctor.name}</h4>
             </div>
           </div>
 
@@ -135,11 +125,11 @@ const PatientAppointments = () => {
           <div className="flex items-center gap-6 lg:justify-center">
             <div className="text-center">
               <p className="text-xs text-slate-500">Date</p>
-              <p className="font-medium text-slate-900">{apt.date}</p>
+              <p className="font-medium text-slate-900">{date}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-500">Time</p>
-              <p className="font-medium text-slate-900">{apt.time}</p>
+              <p className="font-medium text-slate-900">{time}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-500">Type</p>
@@ -175,7 +165,7 @@ const PatientAppointments = () => {
                     <DropdownMenuItem>
                       <Calendar className="w-4 h-4 mr-2" /> Reschedule
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">
+                    <DropdownMenuItem className="text-red-600" onClick={() => cancelAppointment(apt.id)}>
                       <X className="w-4 h-4 mr-2" /> Cancel
                     </DropdownMenuItem>
                   </>
@@ -209,7 +199,8 @@ const PatientAppointments = () => {
         )}
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -247,26 +238,29 @@ const PatientAppointments = () => {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3 lg:w-auto">
           <TabsTrigger value="upcoming">
-            Upcoming ({appointments.upcoming.length})
+            Upcoming ({grouped.upcoming.length})
           </TabsTrigger>
           <TabsTrigger value="past">
-            Past ({appointments.past.length})
+            Past ({grouped.past.length})
           </TabsTrigger>
           <TabsTrigger value="cancelled">
-            Cancelled ({appointments.cancelled.length})
+            Cancelled ({grouped.cancelled.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4 mt-6">
-          {appointments.upcoming.map(renderAppointmentCard)}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {isLoading ? <div className="text-slate-600">Loading…</div> : grouped.upcoming.map(renderAppointmentCard)}
         </TabsContent>
 
         <TabsContent value="past" className="space-y-4 mt-6">
-          {appointments.past.map(renderAppointmentCard)}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {isLoading ? <div className="text-slate-600">Loading…</div> : grouped.past.map(renderAppointmentCard)}
         </TabsContent>
 
         <TabsContent value="cancelled" className="space-y-4 mt-6">
-          {appointments.cancelled.map(renderAppointmentCard)}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {isLoading ? <div className="text-slate-600">Loading…</div> : grouped.cancelled.map(renderAppointmentCard)}
         </TabsContent>
       </Tabs>
     </div>

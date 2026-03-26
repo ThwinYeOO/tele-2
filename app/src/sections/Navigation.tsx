@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { HeartPulse, Menu, X, Phone } from 'lucide-react';
 
 const Navigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -72,13 +74,14 @@ const Navigation = () => {
           {/* CTA Buttons */}
           <div className="hidden lg:flex items-center gap-3">
             <Button
+              asChild
               variant="ghost"
               className={`text-sm font-medium ${isScrolled ? 'text-slate-600' : 'text-slate-600'}`}
             >
-              Sign In
+              <Link to="/sign-in">Sign In</Link>
             </Button>
-            <Button className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-5">
-              Get Started
+            <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-5">
+              <Link to="/register">Get Started</Link>
             </Button>
             <Button
               variant="outline"
@@ -116,11 +119,21 @@ const Navigation = () => {
                 </button>
               ))}
               <hr className="border-slate-100" />
-              <Button variant="ghost" className="justify-start text-slate-600">
-                Sign In
+              <Button asChild variant="ghost" className="justify-start text-slate-600">
+                <Link
+                  to="/sign-in"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Sign In
+                </Link>
               </Button>
-              <Button className="bg-teal-600 hover:bg-teal-700 text-white w-full">
-                Get Started
+              <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white w-full">
+                <Link
+                  to="/register"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Get Started
+                </Link>
               </Button>
               <Button
                 variant="outline"
